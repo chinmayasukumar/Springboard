@@ -35,24 +35,26 @@ exploring the data, and getting acquainted with the 3 tables. */
 /* Q1: Some of the facilities charge a fee to members, but some do not.
 Write a SQL query to produce a list of the names of the facilities that do. */
 
-SELECT membercost
-FROM country_club.Facilities
-WHERE membercost !=0
+SELECT *
+FROM Facilities
+WHERE membercost > 0;
 
 -------------------------------------------------------------------------
 /* Q2: How many facilities do not charge a fee to members? */
 
-4
+SELECT COUNT(*)
+FROM facilities
+WHERE membercost = 0;
 -------------------------------------------------------------------------
 /* Q3: Write an SQL query to show a list of facilities that charge a fee to members,
 where the fee is less than 20% of the facility's monthly maintenance cost.
 Return the facid, facility name, member cost, and monthly maintenance of the
 facilities in question. */
 
-SELECT name, facid, membercost, monthlymaintenance
-FROM Facilities
-WHERE membercost != 0
-AND membercost > 0.2*monthlymaintenance
+SELECT facid, name, membercost, monthlymaintenance
+FROM facilities
+WHERE membercost > 0 AND (membercost < monthlymaintenance/5.0);
+
 
 --------------------------------------------------------------------------
 /* Q4: Write an SQL query to retrieve the details of facilities with ID 1 and 5.
@@ -60,7 +62,7 @@ Try writing the query without using the OR operator. */
 
 SELECT *
 FROM Facilities
-WHERE facid IN (1,5)
+WHERE facid IN (1,5);
 
 --------------------------------------------------------------------------
 /* Q5: Produce a list of facilities, with each labelled as
@@ -68,18 +70,18 @@ WHERE facid IN (1,5)
 more than $100. Return the name and monthly maintenance of the facilities
 in question. */
 
-SELECT name, monthlymaintenance,
+SELECT name,
     CASE WHEN monthlymaintenance > 100 THEN 'expensive'
     ELSE 'cheap' END AS costliness
-FROM Facilities
+FROM Facilities;
 
 --------------------------------------------------------------------------
 /* Q6: You'd like to get the first and last name of the last member(s)
 who signed up. Try not to use the LIMIT clause for your solution. */
 
-SELECT firstname || ', ' || surname as fullname, MAX(joindate)
+SELECT firstname, surname, MAX(joindate)
 FROM Members
-WHERE memid != 0
+WHERE memid != 0;
 
 --------------------------------------------------------------------------
 
@@ -88,14 +90,14 @@ Include in your output the name of the court, and the name of the member
 formatted as a single column. Ensure no duplicate data, and order by
 the member name. */
 
-SELECT DISTINCT m.firstname || ', ' || m.surname as fullname, f.name
+SELECT DISTINCT m.firstname || ', ' || m.surname as fullname, f.name as facility
 FROM Bookings as b
-LEFT JOIN Facilities as f
+INNER JOIN Facilities as f
     ON b.facid = f.facid
-LEFT JOIN Members as m
+INNER JOIN Members as m
     ON m.memid = b.memid
-WHERE f.name = 'Tennis Court 1' OR f.name = 'Tennis Court 2'
-ORDER BY fullname
+WHERE f.name LIKE '%Tennis Court%'
+ORDER BY fullname;
 
 ---------------------------------------------------------------------------
 
@@ -106,37 +108,35 @@ the guest user's ID is always 0. Include in your output the name of the
 facility, the name of the member formatted as a single column, and the cost.
 Order by descending cost, and do not use any subqueries. */
  
-SELECT m.firstname || ', ' || m.surname as fullname, f.name as facility
-    SUM(CASE WHEN m.memid = 0 THEN b.slots*f.guestcost
-    ELSE b.slots*f.membercost END) as cost
+SELECT m.firstname || ', ' || m.surname as fullname, f.name as facility,
+    CASE WHEN m.memid = 0 THEN b.slots*f.guestcost
+    ELSE b.slots*f.membercost END as cost
 FROM Bookings AS b
-LEFT JOIN Facilities AS f
+INNER JOIN Facilities AS f
     ON b.facid = f.facid
-LEFT JOIN Members AS m
+INNER JOIN Members AS m
     ON b.memid = m.memid
 WHERE b.starttime LIKE '2012-09-14%'
-GROUP BY fullname
-HAVING cost > 30
-ORDER BY cost DES
+AND cost > 30
+ORDER BY cost DESC;
 
 -----------------------------------------------------------------------------
 
 /* Q9: This time, produce the same result as in Q8, but using a subquery. */
 
-SELECT firstname || ' ' || surname AS member, name as facility, SUM(cost)
+SELECT firstname || ' ' || surname AS member, name as facility, cost
 FROM
     (SELECT firstname, surname, name,
     CASE WHEN firstname = 'GUEST' THEN guestcost*slots ELSE membercost*slots END AS cost,
     starttime
     FROM members
-    LEFT JOIN bookings
+    INNER JOIN bookings
         ON members.memid = bookings.memid
-    LEFT JOIN facilities
+    INNER JOIN facilities
         ON bookings.facid = facilities.facid) AS inner_table
 WHERE starttime LIKE '2012-09-14%'
-GROUP BY member
-HAVING SUM(cost) > 30
-ORDER BY SUM(cost) DESC
+AND cost > 30
+ORDER BY cost DESC;
 
 ----------------------------------------------------------------------------
 /* PART 2: SQLite
@@ -166,48 +166,64 @@ SELECT f.name,
     SUM(CASE WHEN m.memid = 0 THEN b.slots*f.guestcost
         ELSE b.slots*f.membercost END) as revenue
     FROM Bookings as b
-    LEFT JOIN Facilities as f
+    INNER JOIN Facilities as f
         ON b.facid = f.facid
-    LEFT JOIN Members as m
+    INNER JOIN Members as m
         ON m.memid = b.memid
 GROUP BY f.name
 HAVING revenue < 1000
-ORDER BY revenue DESC
+ORDER BY revenue;
 
 -------------------------------------------------------------------------------
 
 /* Q11: Produce a report of members and who recommended them in alphabetic surname,firstname order */
 
-SELECT DISTINCT m1.firstname || ', ' || m1.surname as name, 
-    m2.firstname + ',' + m2.surname as recommended_by
+SELECT m1.firstname || ', ' || m1.surname as name, 
+    m2.firstname || ', ' || m2.surname as recommended_by
 FROM Members as m1
-LEFT JOIN Members as m2
-    ON m1.recommendedby = m2.memid
-WHERE m1.recommendedby != 0
-ORDER BY m1.surname, m1.firstname
+INNER JOIN Members as m2
+    ON m1.memid = m2.recommendedby
+WHERE m1.memid > 0
+ORDER BY m1.surname, m1.firstname, m2.surname, m2.firstname;
 
 ------------------------------------------------------------------------------
 
 /* Q12: Find the facilities with their usage by member, but not guests */
 
-SELECT f.name, m.firstname || ', ' || m.surname as fullname, COUNT(*)
-FROM Bookings as b
-LEFT JOIN Facilities as f
-    USING (facid)
-LEFT JOIN Members as m
+SELECT f.name, m.firstname || ', ' || m.surname as fullname, COUNT(f.name) as bookings
+FROM Members as m
+INNER JOIN Bookings as b
     USING (memid)
-GROUP BY f.name, m.firstname
-HAVING m.firstname != 'GUEST'
+INNER JOIN Facilities as f
+    USING (facid)
+WHERE m.memid > 0
+GROUP BY f.name, fullname
+ORDER BY f.name, m.surname, m.firstname;
 
 ---------------------------------------------------------------------------
 
 /* Q13: Find the facilities usage by month, but not guests */
 
-SELECT EXTRACT(MONTH FROM b.starttime) as month, f.name, count(*)
-FROM Bookings as b
-LEFT JOIN Facilities as f
-    USING (facid)
-LEFT JOIN Members as m
-    ON m.memid = b.memid
-WHERE m.memid != 0
-GROUP BY month, f.name
+SELECT f.name, m.firstname||', '||m.surname as Member,
+COUNT(f.name) as bookings,
+    SUM(case when month(starttime) = 1 then 1 else 0 end) as Jan,
+    SUM(case when month(starttime) = 2 then 1 else 0 end) as Feb,
+    SUM(case when month(starttime) = 3 then 1 else 0 end) as Mar,
+    SUM(case when month(starttime) = 4 then 1 else 0 end) as Apr,
+    SUM(case when month(starttime) = 5 then 1 else 0 end) as May,
+    SUM(case when month(starttime) = 6 then 1 else 0 end) as Jun,
+    SUM(case when month(starttime) = 7 then 1 else 0 end) as Jul,
+    SUM(case when month(starttime) = 8 then 1 else 0 end) as Aug,
+    SUM(case when month(starttime) = 9 then 1 else 0 end) as Sep,
+    SUM(case when month(starttime) = 10 then 1 else 0 end) as Oct,
+    SUM(case when month(starttime) = 11 then 1 else 0 end) as Nov,
+    SUM(case when month(starttime) = 12 then 1 else 0 end) as Decm
+ 
+FROM Members m
+INNER JOIN Bookings bk on bk.memid = m.memid
+INNER JOIN Facilities f on f.facid = bk.facid
+WHERE m.memid>0
+AND year(starttime) = 2012
+ 
+GROUP BY f.name,concat(m.firstname,' ',m.surname)
+ORDER BY f.name,m.surname,m.firstname;
