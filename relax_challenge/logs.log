@@ -3147,3 +3147,6 @@ THIS IS A JOBLIB ISSUE. If you can, kindly provide the joblib's team with an
 'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
 2023-07-04 15:29:56,725:WARNING:
 'cuml' is a soft dependency and not included in the pycaret installation. Please run: `pip install cuml` to install.
+2023-07-04 16:16:01,927:WARNING:/var/folders/mh/9l7f5q2x0bsc05929xvm2nnh0000gn/T/ipykernel_42778/1380898878.py:2: FutureWarning: Passing unit-less datetime64 dtype to .astype is deprecated and will raise in a future version. Pass 'datetime64[ns]' instead
+  logs.time_stamp = logs.time_stamp.astype('datetime64')
+
